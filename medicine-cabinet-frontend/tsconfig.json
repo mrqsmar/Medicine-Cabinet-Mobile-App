@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "jsx": "react-native",
+    "types": ["react", "react-native"],
+    "paths": {
+      "*": ["node_modules/*"]
+    }
+  }
+}
