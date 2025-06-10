@@ -26,5 +26,9 @@ class Medication(db.Model):
     name = db.Column(db.String(100), nullable=False)
     dosage = db.Column(db.String(50), nullable=False)
     frequency = db.Column(db.String(50))
-    time_of_day = db.Column(db.String(10))
+    photo_url = db.Column(db.String(100), nullable=True)
     notes = db.Column(db.Text)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'name', 'dosage', name='unique_user_med')
+    )
