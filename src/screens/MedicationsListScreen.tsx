@@ -47,7 +47,7 @@ export default function MedicationsListScreen() {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 24 }}>No medications yet</Text>}
       />
-      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('AddEditMedication')}>
+      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('AddEditMedication', {})}>
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
     </View>
