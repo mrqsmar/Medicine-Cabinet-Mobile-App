@@ -1,6 +1,10 @@
 import React from 'react';
 import { Text } from 'react-native';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   NativeStackScreenProps,
@@ -34,6 +38,8 @@ export type TabsParamList = {
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabsParamList>();
+
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 // ── Custom theme ────────────────────────────────────────────────────
 
@@ -133,7 +139,7 @@ function Tabs() {
 
 export default function AppNavigator() {
   return (
-    <NavigationContainer theme={AppTheme}>
+    <NavigationContainer ref={navigationRef} theme={AppTheme}>
       <RootStack.Navigator
         screenOptions={{
           headerTitleStyle: {

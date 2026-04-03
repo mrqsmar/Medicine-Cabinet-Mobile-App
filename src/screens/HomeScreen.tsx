@@ -21,6 +21,10 @@ import {
 } from '../theme';
 import { useMedications } from '../context/MedicationContext';
 import { getDoseLogsForDate, upsertDoseLog } from '../database';
+import {
+  getRefillWarnings,
+  getExpirationWarnings,
+} from '../services/notifications';
 import type { Medication, DoseLog } from '../types/medication';
 import { format } from 'date-fns';
 
@@ -49,6 +53,10 @@ export default function HomeScreen() {
 
   const [rows, setRows] = useState<DoseRow[]>([]);
   const today = format(new Date(), 'yyyy-MM-dd');
+
+  // Compute warnings
+  const refillMeds = getRefillWarnings(state.medications);
+  const expiringMeds = getExpirationWarnings(state.medications);
 
   // Load dose logs on every focus
   useFocusEffect(
@@ -85,7 +93,6 @@ export default function HomeScreen() {
     const nowTaken = !row.taken;
     const takenAt = nowTaken ? new Date().toISOString() : undefined;
 
-    // Persist to SQLite
     await upsertDoseLog({
       id: row.logId,
       medicationId: row.medication.id,
@@ -95,7 +102,6 @@ export default function HomeScreen() {
       takenAt,
     });
 
-    // Optimistic UI update
     setRows((prev) =>
       prev.map((r) =>
         r.logId === row.logId ? { ...r, taken: nowTaken, takenAt } : r,
@@ -115,6 +121,45 @@ export default function HomeScreen() {
       {/* ── Header ──────────────────────────────────── */}
       <Text style={styles.heading}>Today's Medications</Text>
       <Text style={styles.date}>{format(new Date(), 'EEEE, MMMM d')}</Text>
+
+      {/* ── Warning Banners ─────────────────────────── */}
+      {refillMeds.length > 0 && (
+        <View style={styles.warningBanner}>
+          <Text style={styles.warningIcon}>⚠️</Text>
+          <View style={styles.warningTextWrap}>
+            <Text style={styles.warningTitle}>Refill Needed</Text>
+            {refillMeds.map((m) => {
+              const dosesPerDay = m.dailyDoses ?? m.times.length ?? 1;
+              const daysLeft =
+                dosesPerDay > 0 && m.remainingPills != null
+                  ? Math.floor(m.remainingPills / dosesPerDay)
+                  : 0;
+              return (
+                <Text key={m.id} style={styles.warningBody}>
+                  {m.name} — {m.remainingPills} pills left ({daysLeft} day
+                  {daysLeft !== 1 ? 's' : ''} supply)
+                </Text>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {expiringMeds.length > 0 && (
+        <View style={styles.expirationBanner}>
+          <Text style={styles.warningIcon}>📋</Text>
+          <View style={styles.warningTextWrap}>
+            <Text style={styles.expirationTitle}>
+              Prescription Expiring Soon
+            </Text>
+            {expiringMeds.map((m) => (
+              <Text key={m.id} style={styles.expirationBody}>
+                {m.name} — expires {m.expirationDate}
+              </Text>
+            ))}
+          </View>
+        </View>
+      )}
 
       {/* ── Progress ────────────────────────────────── */}
       <View style={styles.progressCard}>
@@ -182,7 +227,6 @@ function DoseCard({
     >
       {/* Top row: photo + info + edit pencil */}
       <View style={styles.cardTopRow}>
-        {/* Thumbnail */}
         {photoSource ? (
           <Image
             source={{ uri: photoSource }}
@@ -195,7 +239,6 @@ function DoseCard({
           </View>
         )}
 
-        {/* Name / dose / time */}
         <View style={styles.cardInfo}>
           <Text style={[styles.cardName, taken && styles.textTaken]}>
             {medication.name}
@@ -208,7 +251,6 @@ function DoseCard({
           </Text>
         </View>
 
-        {/* Edit pencil */}
         <TouchableOpacity
           onPress={onEdit}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -220,7 +262,7 @@ function DoseCard({
         </TouchableOpacity>
       </View>
 
-      {/* Large checkmark button — centered, full-width */}
+      {/* Large checkmark button */}
       <TouchableOpacity
         onPress={onToggle}
         activeOpacity={0.6}
@@ -229,9 +271,7 @@ function DoseCard({
         accessibilityLabel={taken ? 'Mark as not taken' : 'Mark as taken'}
         accessibilityState={{ checked: taken }}
       >
-        <Text
-          style={[styles.checkIcon, !taken && styles.checkIconPending]}
-        >
+        <Text style={[styles.checkIcon, !taken && styles.checkIconPending]}>
           {taken ? '✓' : '○'}
         </Text>
         <Text style={[styles.checkLabel, taken && styles.checkLabelTaken]}>
@@ -270,6 +310,58 @@ const styles = StyleSheet.create({
     fontWeight: FontWeights.medium,
     color: Colors.textSecondary,
     textAlign: 'center',
+    marginTop: Spacing.xs,
+  },
+
+  // Warning banners
+  warningBanner: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF4E5',
+    borderWidth: 2,
+    borderColor: Colors.warning,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginTop: Spacing.lg,
+    alignItems: 'flex-start',
+  },
+  expirationBanner: {
+    flexDirection: 'row',
+    backgroundColor: '#FDE8E8',
+    borderWidth: 2,
+    borderColor: Colors.cancel,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginTop: Spacing.md,
+    alignItems: 'flex-start',
+  },
+  warningIcon: {
+    fontSize: 28,
+    marginRight: Spacing.md,
+    marginTop: 2,
+  },
+  warningTextWrap: {
+    flex: 1,
+  },
+  warningTitle: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.bold,
+    color: '#8B5E00',
+  },
+  warningBody: {
+    fontSize: FontSizes.base,
+    fontWeight: FontWeights.medium,
+    color: '#8B5E00',
+    marginTop: Spacing.xs,
+  },
+  expirationTitle: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.bold,
+    color: Colors.cancel,
+  },
+  expirationBody: {
+    fontSize: FontSizes.base,
+    fontWeight: FontWeights.medium,
+    color: Colors.cancel,
     marginTop: Spacing.xs,
   },
 
