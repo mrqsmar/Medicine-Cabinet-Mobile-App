@@ -2,65 +2,187 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   StyleSheet,
   Image,
+  TouchableOpacity,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadow } from '../theme';
-import { CheckmarkBadge } from '../components';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import {
+  Colors,
+  FontSizes,
+  FontWeights,
+  Spacing,
+  BorderRadius,
+  Shadow,
+  MinTapSize,
+} from '../theme';
 import { useMedications } from '../context/MedicationContext';
-import { getDoseLogsForDate } from '../database';
-import { format } from 'date-fns';
+import { getDoseLogsForDate, upsertDoseLog } from '../database';
 import type { Medication, DoseLog } from '../types/medication';
+import { format } from 'date-fns';
+
+// ── Deterministic log ID so upsert is idempotent ────────────────────
+
+function logId(medicationId: string, date: string, time: string): string {
+  return `${medicationId}|${date}|${time}`;
+}
+
+// ── Row model ───────────────────────────────────────────────────────
 
 interface DoseRow {
   medication: Medication;
-  log?: DoseLog;
   time: string;
+  taken: boolean;
+  takenAt?: string;
+  logId: string;
 }
+
+// ── Screen ──────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const { state } = useMedications();
-  const [doseRows, setDoseRows] = useState<DoseRow[]>([]);
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const [rows, setRows] = useState<DoseRow[]>([]);
   const today = format(new Date(), 'yyyy-MM-dd');
 
+  // Load dose logs on every focus
   useFocusEffect(
     useCallback(() => {
       (async () => {
         const logs = await getDoseLogsForDate(today);
         const logMap = new Map<string, DoseLog>();
         for (const l of logs) {
-          logMap.set(`${l.medicationId}_${l.scheduledTime}`, l);
+          logMap.set(l.id, l);
         }
 
-        const rows: DoseRow[] = [];
+        const built: DoseRow[] = [];
         for (const med of state.medications) {
           for (const t of med.times) {
-            rows.push({
+            const id = logId(med.id, today, t);
+            const log = logMap.get(id);
+            built.push({
               medication: med,
-              log: logMap.get(`${med.id}_${t}`),
               time: t,
+              taken: log?.status === 'taken',
+              takenAt: log?.takenAt,
+              logId: id,
             });
           }
         }
-        rows.sort((a, b) => a.time.localeCompare(b.time));
-        setDoseRows(rows);
+        built.sort((a, b) => a.time.localeCompare(b.time));
+        setRows(built);
       })();
     }, [today, state.medications]),
   );
 
-  const takenCount = doseRows.filter((r) => r.log?.status === 'taken').length;
+  // Toggle taken status
+  const toggleTaken = async (row: DoseRow) => {
+    const nowTaken = !row.taken;
+    const takenAt = nowTaken ? new Date().toISOString() : undefined;
 
-  const renderItem = ({ item }: { item: DoseRow }) => {
-    const status = item.log?.status ?? 'pending';
-    const photoSource = item.medication.photoUri ?? item.medication.pillPhotoUri;
+    // Persist to SQLite
+    await upsertDoseLog({
+      id: row.logId,
+      medicationId: row.medication.id,
+      scheduledDate: today,
+      scheduledTime: row.time,
+      status: nowTaken ? 'taken' : 'pending',
+      takenAt,
+    });
 
-    return (
-      <View
-        style={[styles.doseCard, status === 'taken' && styles.doseCardDone]}
-        accessibilityLabel={`${item.medication.name} at ${item.time}, ${status}`}
-      >
+    // Optimistic UI update
+    setRows((prev) =>
+      prev.map((r) =>
+        r.logId === row.logId ? { ...r, taken: nowTaken, takenAt } : r,
+      ),
+    );
+  };
+
+  const takenCount = rows.filter((r) => r.taken).length;
+  const totalCount = rows.length;
+  const progressFraction = totalCount > 0 ? takenCount / totalCount : 0;
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.scrollContent}
+    >
+      {/* ── Header ──────────────────────────────────── */}
+      <Text style={styles.heading}>Today's Medications</Text>
+      <Text style={styles.date}>{format(new Date(), 'EEEE, MMMM d')}</Text>
+
+      {/* ── Progress ────────────────────────────────── */}
+      <View style={styles.progressCard}>
+        <View style={styles.progressTextRow}>
+          <Text style={styles.progressLabel}>Progress</Text>
+          <Text style={styles.progressCount}>
+            {takenCount} of {totalCount} taken
+          </Text>
+        </View>
+        <View style={styles.progressBarBg}>
+          <View
+            style={[
+              styles.progressBarFill,
+              { width: `${Math.round(progressFraction * 100)}%` as any },
+            ]}
+          />
+        </View>
+        {totalCount > 0 && takenCount === totalCount && (
+          <Text style={styles.allDoneText}>All done for today!</Text>
+        )}
+      </View>
+
+      {/* ── Medication cards ────────────────────────── */}
+      {rows.length === 0 ? (
+        <Text style={styles.empty}>No medications scheduled today.</Text>
+      ) : (
+        rows.map((row) => (
+          <DoseCard
+            key={row.logId}
+            row={row}
+            onToggle={() => toggleTaken(row)}
+            onEdit={() =>
+              navigation.navigate('AddEditMedication', {
+                medicationId: row.medication.id,
+              })
+            }
+          />
+        ))
+      )}
+    </ScrollView>
+  );
+}
+
+// ── DoseCard ────────────────────────────────────────────────────────
+
+function DoseCard({
+  row,
+  onToggle,
+  onEdit,
+}: {
+  row: DoseRow;
+  onToggle: () => void;
+  onEdit: () => void;
+}) {
+  const { medication, time, taken } = row;
+  const photoSource = medication.photoUri ?? medication.pillPhotoUri;
+  const dosageLabel = medication.dosageAmount
+    ? `${medication.dosageAmount} ${medication.dosageUnit}`
+    : medication.dosage;
+
+  return (
+    <View
+      style={[styles.card, taken && styles.cardTaken]}
+      accessibilityLabel={`${medication.name}, ${dosageLabel} at ${time}, ${taken ? 'taken' : 'not taken'}`}
+    >
+      {/* Top row: photo + info + edit pencil */}
+      <View style={styles.cardTopRow}>
+        {/* Thumbnail */}
         {photoSource ? (
           <Image
             source={{ uri: photoSource }}
@@ -72,109 +194,240 @@ export default function HomeScreen() {
             <Text style={styles.placeholderIcon}>💊</Text>
           </View>
         )}
-        <View style={styles.doseInfo}>
-          <Text style={styles.medName}>{item.medication.name}</Text>
-          <Text style={styles.doseTime}>
-            {item.time} · {item.medication.dosageAmount} {item.medication.dosageUnit}
+
+        {/* Name / dose / time */}
+        <View style={styles.cardInfo}>
+          <Text style={[styles.cardName, taken && styles.textTaken]}>
+            {medication.name}
+          </Text>
+          <Text style={[styles.cardDose, taken && styles.textTaken]}>
+            {dosageLabel}
+          </Text>
+          <Text style={[styles.cardTime, taken && styles.textTaken]}>
+            {time}
           </Text>
         </View>
-        <CheckmarkBadge status={status} size={36} />
-      </View>
-    );
-  };
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Today</Text>
-        <Text style={styles.summaryCount}>
-          {takenCount} / {doseRows.length} doses taken
+        {/* Edit pencil */}
+        <TouchableOpacity
+          onPress={onEdit}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={styles.editButton}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${medication.name}`}
+        >
+          <Text style={styles.editIcon}>✏️</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Large checkmark button — centered, full-width */}
+      <TouchableOpacity
+        onPress={onToggle}
+        activeOpacity={0.6}
+        style={[styles.checkButton, taken && styles.checkButtonTaken]}
+        accessibilityRole="button"
+        accessibilityLabel={taken ? 'Mark as not taken' : 'Mark as taken'}
+        accessibilityState={{ checked: taken }}
+      >
+        <Text
+          style={[styles.checkIcon, !taken && styles.checkIconPending]}
+        >
+          {taken ? '✓' : '○'}
         </Text>
-      </View>
-
-      <FlatList
-        data={doseRows}
-        keyExtractor={(item) => `${item.medication.id}_${item.time}`}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <Text style={styles.empty}>No medications scheduled today.</Text>
-        }
-      />
+        <Text style={[styles.checkLabel, taken && styles.checkLabelTaken]}>
+          {taken ? 'Taken' : 'Mark as Taken'}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
-const THUMB_SIZE = 48;
+// ── Styles ──────────────────────────────────────────────────────────
+
+const THUMB_SIZE = 60;
+const CHECK_HEIGHT = 56;
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  summaryCard: {
-    backgroundColor: Colors.primary,
-    padding: Spacing.xl,
-    margin: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+  scrollContent: {
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xxxl + 24,
   },
-  summaryTitle: {
-    fontSize: FontSizes.lg,
+
+  // Header
+  heading: {
+    fontSize: FontSizes.xxl,
+    fontWeight: FontWeights.bold,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+  },
+  date: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.medium,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: Spacing.xs,
+  },
+
+  // Progress card
+  progressCard: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    marginTop: Spacing.xl,
+    marginBottom: Spacing.xl,
+  },
+  progressTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressLabel: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.semibold,
+    color: Colors.textOnPrimary,
+  },
+  progressCount: {
+    fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
     color: Colors.textOnPrimary,
   },
-  summaryCount: {
-    fontSize: FontSizes.md,
-    color: Colors.textOnPrimary,
-    marginTop: Spacing.xs,
+  progressBarBg: {
+    height: 12,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 6,
+    marginTop: Spacing.md,
+    overflow: 'hidden',
   },
-  list: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxxl,
+  progressBarFill: {
+    height: 12,
+    backgroundColor: Colors.confirm,
+    borderRadius: 6,
   },
-  doseCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  allDoneText: {
+    fontSize: FontSizes.base,
+    fontWeight: FontWeights.semibold,
+    color: Colors.confirm,
+    textAlign: 'center',
+    marginTop: Spacing.md,
+  },
+
+  // Card
+  card: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    ...Shadow.sm,
+    marginBottom: Spacing.lg,
+    ...Shadow.md,
   },
-  doseCardDone: {
-    opacity: 0.55,
+  cardTaken: {
+    opacity: 0.6,
+    borderWidth: 2,
+    borderColor: Colors.confirm,
   },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  // Thumbnail
   thumb: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: BorderRadius.sm,
-    marginRight: Spacing.md,
+    borderRadius: BorderRadius.md,
   },
   placeholderThumb: {
     backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   placeholderIcon: {
-    fontSize: 22,
+    fontSize: 28,
   },
-  doseInfo: {
+
+  // Card info
+  cardInfo: {
     flex: 1,
+    marginLeft: Spacing.lg,
   },
-  medName: {
-    fontSize: FontSizes.base,
-    fontWeight: FontWeights.semibold,
+  cardName: {
+    fontSize: FontSizes.lg,
+    fontWeight: FontWeights.bold,
     color: Colors.textPrimary,
   },
-  doseTime: {
-    fontSize: FontSizes.sm,
+  cardDose: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.medium,
     color: Colors.textSecondary,
     marginTop: 2,
   },
+  cardTime: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.semibold,
+    color: Colors.accent,
+    marginTop: 2,
+  },
+  textTaken: {
+    color: Colors.disabled,
+  },
+
+  // Edit pencil
+  editButton: {
+    minWidth: MinTapSize,
+    minHeight: MinTapSize,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editIcon: {
+    fontSize: 24,
+  },
+
+  // Checkmark button
+  checkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.lg,
+    height: CHECK_HEIGHT,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.background,
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  checkButtonTaken: {
+    backgroundColor: Colors.confirm,
+    borderColor: Colors.confirm,
+  },
+  checkIcon: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: Colors.textOnPrimary,
+    marginRight: Spacing.sm,
+  },
+  checkIconPending: {
+    color: Colors.textSecondary,
+  },
+  checkLabel: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.bold,
+    color: Colors.textPrimary,
+  },
+  checkLabelTaken: {
+    color: Colors.textOnConfirm,
+  },
+
+  // Empty
   empty: {
-    fontSize: FontSizes.base,
+    fontSize: FontSizes.md,
     color: Colors.textSecondary,
     textAlign: 'center',
     marginTop: Spacing.xxl,
+    lineHeight: 30,
   },
 });
