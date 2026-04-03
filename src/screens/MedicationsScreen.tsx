@@ -1,23 +1,17 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { View, Text, FlatList, Alert, StyleSheet } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors, FontSizes, Spacing, BorderRadius, MinTapSize } from '../theme';
+import { Colors, FontSizes, Spacing } from '../theme';
 import { MedCard, BigButton } from '../components';
-import { getAllMedications, deleteMedication } from '../database';
+import { useMedications } from '../context/MedicationContext';
 import type { Medication } from '../types/medication';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 export default function MedicationsScreen() {
-  const [medications, setMedications] = useState<Medication[]>([]);
+  const { state, removeMedication } = useMedications();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-
-  useFocusEffect(
-    useCallback(() => {
-      (async () => setMedications(await getAllMedications()))();
-    }, []),
-  );
 
   const handleDelete = (med: Medication) => {
     Alert.alert(
@@ -28,10 +22,7 @@ export default function MedicationsScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            await deleteMedication(med.id);
-            setMedications((prev) => prev.filter((m) => m.id !== med.id));
-          },
+          onPress: () => removeMedication(med.id),
         },
       ],
     );
@@ -40,7 +31,7 @@ export default function MedicationsScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={medications}
+        data={state.medications}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <MedCard

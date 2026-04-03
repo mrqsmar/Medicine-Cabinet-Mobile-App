@@ -6,15 +6,27 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  Image,
+  Platform,
+  Alert,
 } from 'react-native';
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
-import { getMedicationById, upsertMedication } from '../database';
-import type { Medication, MedicationForm } from '../types/medication';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { useMedications } from '../context/MedicationContext';
+import { getMedicationById } from '../database';
+import type {
+  Medication,
+  DosageUnit,
+  Recurrence,
+} from '../types/medication';
 import { CancelSaveBar, BigButton } from '../components';
+import SegmentedControl from '../components/SegmentedControl';
 import {
   Colors,
   FontSizes,
@@ -22,87 +34,289 @@ import {
   Spacing,
   BorderRadius,
   MinTapSize,
+  Shadow,
 } from '../theme';
+import { format, parse } from 'date-fns';
+
+// ── Helpers ─────────────────────────────────────────────────────────
 
 const now = () => new Date().toISOString();
+const todayStr = () => format(new Date(), 'yyyy-MM-dd');
+
+function blankMedication(): Medication {
+  const ts = now();
+  return {
+    id: uuidv4(),
+    name: '',
+    photoUri: undefined,
+    dosageAmount: 0,
+    dosageUnit: 'mg',
+    dosage: '',
+    prescribingDoctor: '',
+    startDate: todayStr(),
+    expirationDate: '',
+    recurrence: 'Daily',
+    notes: '',
+    colorShape: '',
+    form: 'tablet',
+    times: ['08:00'],
+    createdAt: ts,
+    updatedAt: ts,
+  };
+}
+
+// ── Screen ──────────────────────────────────────────────────────────
 
 export default function AddEditMedicationScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'AddEditMedication'>>();
   const navigation = useNavigation();
+  const { saveMedication } = useMedications();
 
-  const [med, setMed] = useState<Medication>({
-    id: uuidv4(),
-    name: '',
-    dosage: '',
-    form: 'tablet',
-    times: [],
-    pillPhotoUri: undefined,
-    pillDescription: '',
-    instructions: '',
-    doctorNotes: '',
-    pharmacyPhone: '',
-    remainingPills: undefined,
-    dailyDoses: undefined,
-    createdAt: now(),
-    updatedAt: now(),
-  });
+  const isEditing = !!route.params?.medicationId;
+
+  const [med, setMed] = useState<Medication>(blankMedication);
+  const [saving, setSaving] = useState(false);
   const [timeInput, setTimeInput] = useState('08:00');
+
+  // Date picker state
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showExpPicker, setShowExpPicker] = useState(false);
 
   useEffect(() => {
     if (route.params?.medicationId) {
-      getMedicationById(route.params.medicationId).then(
-        (m) => m && setMed(m),
-      );
+      getMedicationById(route.params.medicationId).then((m) => {
+        if (m) setMed(m);
+      });
     }
   }, [route.params?.medicationId]);
 
+  // ── Field helpers ───────────────────────────────────────────────
+
+  const set = <K extends keyof Medication>(key: K, value: Medication[K]) =>
+    setMed((prev) => ({ ...prev, [key]: value }));
+
   const addTime = () => {
-    if (!/^[0-2][0-9]:[0-5][0-9]$/.test(timeInput)) return;
+    if (!/^[0-2]\d:[0-5]\d$/.test(timeInput)) return;
     if (!med.times.includes(timeInput))
-      setMed({ ...med, times: [...med.times, timeInput].sort() });
+      setMed((prev) => ({ ...prev, times: [...prev.times, timeInput].sort() }));
   };
 
   const removeTime = (t: string) =>
-    setMed({ ...med, times: med.times.filter((x) => x !== t) });
+    setMed((prev) => ({ ...prev, times: prev.times.filter((x) => x !== t) }));
 
-  const pickImage = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
-    if (!res.canceled) setMed({ ...med, pillPhotoUri: res.assets[0].uri });
+  // ── Photo ─────────────────────────────────────────────────────
+
+  const pickPhoto = () => {
+    Alert.alert('Add Photo', 'Choose a source', [
+      {
+        text: 'Camera',
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (!perm.granted) {
+            Alert.alert('Permission required', 'Camera access is needed to take a photo.');
+            return;
+          }
+          const res = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+          });
+          if (!res.canceled) set('photoUri', res.assets[0].uri);
+        },
+      },
+      {
+        text: 'Gallery',
+        onPress: async () => {
+          const res = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+          });
+          if (!res.canceled) set('photoUri', res.assets[0].uri);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
+  // ── Date pickers ──────────────────────────────────────────────
+
+  const onStartDateChange = (_e: DateTimePickerEvent, date?: Date) => {
+    setShowStartPicker(Platform.OS === 'ios');
+    if (date) set('startDate', format(date, 'yyyy-MM-dd'));
+  };
+
+  const onExpDateChange = (_e: DateTimePickerEvent, date?: Date) => {
+    setShowExpPicker(Platform.OS === 'ios');
+    if (date) set('expirationDate', format(date, 'yyyy-MM-dd'));
+  };
+
+  const parseDate = (str: string): Date => {
+    if (!str) return new Date();
+    try {
+      return parse(str, 'yyyy-MM-dd', new Date());
+    } catch {
+      return new Date();
+    }
+  };
+
+  // ── Save ──────────────────────────────────────────────────────
+
   const onSave = async () => {
-    const toSave: Medication = { ...med, name: med.name.trim(), updatedAt: now() };
-    if (!toSave.name) return;
-    await upsertMedication(toSave);
+    const trimmedName = med.name.trim();
+    if (!trimmedName) {
+      Alert.alert('Required', 'Please enter a medication name.');
+      return;
+    }
+    setSaving(true);
+    const toSave: Medication = {
+      ...med,
+      name: trimmedName,
+      dosage: `${med.dosageAmount} ${med.dosageUnit}`,
+      pillPhotoUri: med.photoUri,
+      pillDescription: med.colorShape,
+      updatedAt: now(),
+    };
+    await saveMedication(toSave);
+    setSaving(false);
     navigation.goBack();
   };
 
+  // ── Render ────────────────────────────────────────────────────
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.label}>Name</Text>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* ── Photo ──────────────────────────────────── */}
+      <TouchableOpacity
+        onPress={pickPhoto}
+        style={styles.photoWrap}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Add medication photo"
+      >
+        {med.photoUri ? (
+          <Image
+            source={{ uri: med.photoUri }}
+            style={styles.photo}
+            accessibilityIgnoresInvertColors
+          />
+        ) : (
+          <View style={[styles.photo, styles.photoPlaceholder]}>
+            <Text style={styles.photoPlaceholderIcon}>📷</Text>
+            <Text style={styles.photoPlaceholderText}>Tap to add photo</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      {/* ── Name ───────────────────────────────────── */}
+      <Label text="Medication Name" />
       <TextInput
         style={styles.input}
         value={med.name}
-        onChangeText={(v) => setMed({ ...med, name: v })}
-        placeholder="Metformin"
+        onChangeText={(v) => set('name', v)}
+        placeholder="e.g. Metformin"
         placeholderTextColor={Colors.disabled}
         accessibilityLabel="Medication name"
+        autoCapitalize="words"
       />
 
-      <Text style={styles.label}>Dosage</Text>
+      {/* ── Dosage ─────────────────────────────────── */}
+      <Label text="Dosage" />
+      <View style={styles.dosageRow}>
+        <TextInput
+          style={[styles.input, styles.dosageInput]}
+          value={med.dosageAmount ? String(med.dosageAmount) : ''}
+          onChangeText={(v) => {
+            const num = parseFloat(v);
+            set('dosageAmount', isNaN(num) ? 0 : num);
+          }}
+          placeholder="500"
+          placeholderTextColor={Colors.disabled}
+          keyboardType="decimal-pad"
+          accessibilityLabel="Dosage amount"
+        />
+        <View style={styles.dosageUnitWrap}>
+          <SegmentedControl<DosageUnit>
+            options={['mg', 'cc']}
+            value={med.dosageUnit}
+            onChange={(v) => {
+              set('dosageUnit', v);
+              set('form', v === 'cc' ? 'liquid' : 'tablet');
+            }}
+            labels={{ mg: 'mg (tablet)', cc: 'cc (liquid)' }}
+            accessibilityLabel="Dosage unit"
+          />
+        </View>
+      </View>
+
+      {/* ── Prescribing Doctor ─────────────────────── */}
+      <Label text="Prescribing Doctor" />
       <TextInput
         style={styles.input}
-        value={med.dosage}
-        onChangeText={(v) => setMed({ ...med, dosage: v })}
-        placeholder="500mg"
+        value={med.prescribingDoctor}
+        onChangeText={(v) => set('prescribingDoctor', v)}
+        placeholder="Dr. Smith"
         placeholderTextColor={Colors.disabled}
-        accessibilityLabel="Dosage"
+        accessibilityLabel="Prescribing doctor"
+        autoCapitalize="words"
       />
 
-      <Text style={styles.label}>Times per day</Text>
+      {/* ── Start Date ─────────────────────────────── */}
+      <Label text="Prescription Start Date" />
+      <TouchableOpacity
+        style={styles.dateButton}
+        onPress={() => setShowStartPicker(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Select start date"
+      >
+        <Text style={styles.dateButtonText}>
+          {med.startDate || 'Select date'}
+        </Text>
+      </TouchableOpacity>
+      {showStartPicker && (
+        <DateTimePicker
+          value={parseDate(med.startDate)}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onStartDateChange}
+        />
+      )}
+
+      {/* ── Expiration Date ────────────────────────── */}
+      <Label text="Expiration Date" />
+      <TouchableOpacity
+        style={styles.dateButton}
+        onPress={() => setShowExpPicker(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Select expiration date"
+      >
+        <Text style={styles.dateButtonText}>
+          {med.expirationDate || 'Select date'}
+        </Text>
+      </TouchableOpacity>
+      {showExpPicker && (
+        <DateTimePicker
+          value={parseDate(med.expirationDate)}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onExpDateChange}
+          minimumDate={parseDate(med.startDate)}
+        />
+      )}
+
+      {/* ── Recurrence ─────────────────────────────── */}
+      <Label text="Recurrence" />
+      <SegmentedControl<Recurrence>
+        options={['Daily', 'Weekly', 'Monthly']}
+        value={med.recurrence}
+        onChange={(v) => set('recurrence', v)}
+        accessibilityLabel="Recurrence pattern"
+      />
+
+      {/* ── Times ──────────────────────────────────── */}
+      <Label text="Reminder Times" />
       <View style={styles.timeRow}>
         <TextInput
           style={[styles.input, { flex: 1 }]}
@@ -133,90 +347,55 @@ export default function AddEditMedicationScreen() {
         ))}
       </View>
 
-      <Text style={styles.label}>Pill details</Text>
+      {/* ── Color / Shape ──────────────────────────── */}
+      <Label text="Color / Shape Description" />
       <TextInput
         style={styles.input}
-        value={med.pillDescription}
-        onChangeText={(v) => setMed({ ...med, pillDescription: v })}
-        placeholder="Blue, round, imprint M 500"
+        value={med.colorShape}
+        onChangeText={(v) => set('colorShape', v)}
+        placeholder="White, round, imprint M500"
         placeholderTextColor={Colors.disabled}
-        accessibilityLabel="Pill description"
+        accessibilityLabel="Color and shape description"
       />
 
-      <Text style={styles.label}>Instructions</Text>
+      {/* ── Notes ──────────────────────────────────── */}
+      <Label text="Notes" />
       <TextInput
         style={[styles.input, styles.multiline]}
         multiline
-        value={med.instructions}
-        onChangeText={(v) => setMed({ ...med, instructions: v })}
-        placeholder="Take with breakfast"
+        value={med.notes}
+        onChangeText={(v) => set('notes', v)}
+        placeholder="Custom instructions, refill notes..."
         placeholderTextColor={Colors.disabled}
-        accessibilityLabel="Instructions"
+        accessibilityLabel="Notes"
       />
 
-      <Text style={styles.label}>Doctor's notes</Text>
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        multiline
-        value={med.doctorNotes}
-        onChangeText={(v) => setMed({ ...med, doctorNotes: v })}
-        placeholder="Watch for dizziness"
-        placeholderTextColor={Colors.disabled}
-        accessibilityLabel="Doctor notes"
-      />
-
-      <Text style={styles.label}>Pharmacy phone</Text>
-      <TextInput
-        style={styles.input}
-        value={med.pharmacyPhone}
-        onChangeText={(v) => setMed({ ...med, pharmacyPhone: v })}
-        placeholder="5551234567"
-        placeholderTextColor={Colors.disabled}
-        keyboardType="phone-pad"
-        accessibilityLabel="Pharmacy phone number"
-      />
-
-      <Text style={styles.label}>Pill count remaining (optional)</Text>
-      <TextInput
-        style={styles.input}
-        value={med.remainingPills?.toString() || ''}
-        onChangeText={(v) =>
-          setMed({ ...med, remainingPills: v ? Number(v) : undefined })
-        }
-        keyboardType="numeric"
-        placeholderTextColor={Colors.disabled}
-        accessibilityLabel="Remaining pill count"
-      />
-
-      <Text style={styles.label}>Daily doses (optional)</Text>
-      <TextInput
-        style={styles.input}
-        value={med.dailyDoses?.toString() || ''}
-        onChangeText={(v) =>
-          setMed({ ...med, dailyDoses: v ? Number(v) : undefined })
-        }
-        keyboardType="numeric"
-        placeholderTextColor={Colors.disabled}
-        accessibilityLabel="Number of daily doses"
-      />
-
-      <BigButton
-        label="Pick pill photo"
-        onPress={pickImage}
-        variant="outline"
-        style={{ marginTop: Spacing.sm }}
-      />
-
+      {/* ── Cancel / Save ──────────────────────────── */}
       <CancelSaveBar
         onCancel={() => navigation.goBack()}
         onSave={onSave}
         saveDisabled={!med.name.trim()}
+        saving={saving}
       />
     </ScrollView>
   );
 }
 
+// ── Label helper ────────────────────────────────────────────────────
+
+function Label({ text }: { text: string }) {
+  return <Text style={styles.label}>{text}</Text>;
+}
+
+// ── Styles ──────────────────────────────────────────────────────────
+
+const PHOTO_SIZE = 120;
+
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
   container: {
     padding: Spacing.lg,
     gap: Spacing.md,
@@ -226,6 +405,7 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.base,
     fontWeight: FontWeights.semibold,
     color: Colors.textPrimary,
+    marginTop: Spacing.sm,
   },
   input: {
     borderWidth: 1,
@@ -238,9 +418,65 @@ const styles = StyleSheet.create({
     minHeight: MinTapSize,
   },
   multiline: {
-    height: 90,
+    height: 100,
     textAlignVertical: 'top',
   },
+
+  // Photo
+  photoWrap: {
+    alignSelf: 'center',
+    marginBottom: Spacing.sm,
+  },
+  photo: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+    borderRadius: PHOTO_SIZE / 2,
+  },
+  photoPlaceholder: {
+    backgroundColor: Colors.background,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoPlaceholderIcon: {
+    fontSize: 32,
+  },
+  photoPlaceholderText: {
+    fontSize: FontSizes.xs,
+    color: Colors.textSecondary,
+    marginTop: Spacing.xs,
+  },
+
+  // Dosage row
+  dosageRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  dosageInput: {
+    flex: 1,
+  },
+  dosageUnitWrap: {
+    flex: 2,
+  },
+
+  // Date buttons
+  dateButton: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    backgroundColor: Colors.surface,
+    minHeight: MinTapSize,
+    justifyContent: 'center',
+  },
+  dateButtonText: {
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+
+  // Time chips
   timeRow: {
     flexDirection: 'row',
     alignItems: 'center',

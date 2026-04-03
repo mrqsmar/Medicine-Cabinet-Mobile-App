@@ -10,7 +10,6 @@ const DB_NAME = 'medicine_cabinet.db';
 
 let _db: SQLite.SQLiteDatabase | null = null;
 
-/** Open (or create) the database and run migrations. */
 export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (_db) return _db;
   _db = await SQLite.openDatabaseAsync(DB_NAME);
@@ -24,20 +23,29 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 async function createTables(db: SQLite.SQLiteDatabase) {
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS medications (
-      id            TEXT PRIMARY KEY NOT NULL,
-      name          TEXT NOT NULL,
-      dosage        TEXT NOT NULL,
-      form          TEXT NOT NULL DEFAULT 'tablet',
-      times         TEXT NOT NULL DEFAULT '[]',
-      pillPhotoUri  TEXT,
-      pillDescription TEXT,
-      instructions  TEXT,
-      doctorNotes   TEXT,
-      pharmacyPhone TEXT,
-      remainingPills INTEGER,
-      dailyDoses    INTEGER,
-      createdAt     TEXT NOT NULL,
-      updatedAt     TEXT NOT NULL
+      id                TEXT PRIMARY KEY NOT NULL,
+      name              TEXT NOT NULL,
+      photoUri          TEXT,
+      dosageAmount      REAL NOT NULL DEFAULT 0,
+      dosageUnit        TEXT NOT NULL DEFAULT 'mg',
+      dosage            TEXT NOT NULL DEFAULT '',
+      prescribingDoctor TEXT NOT NULL DEFAULT '',
+      startDate         TEXT NOT NULL DEFAULT '',
+      expirationDate    TEXT NOT NULL DEFAULT '',
+      recurrence        TEXT NOT NULL DEFAULT 'Daily',
+      notes             TEXT NOT NULL DEFAULT '',
+      colorShape        TEXT NOT NULL DEFAULT '',
+      form              TEXT NOT NULL DEFAULT 'tablet',
+      times             TEXT NOT NULL DEFAULT '[]',
+      pillPhotoUri      TEXT,
+      pillDescription   TEXT,
+      instructions      TEXT,
+      doctorNotes       TEXT,
+      pharmacyPhone     TEXT,
+      remainingPills    INTEGER,
+      dailyDoses        INTEGER,
+      createdAt         TEXT NOT NULL,
+      updatedAt         TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS dose_logs (
@@ -96,18 +104,29 @@ export async function upsertMedication(med: Medication): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
     `INSERT OR REPLACE INTO medications
-       (id, name, dosage, form, times, pillPhotoUri, pillDescription,
-        instructions, doctorNotes, pharmacyPhone, remainingPills, dailyDoses,
-        createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, photoUri, dosageAmount, dosageUnit, dosage,
+        prescribingDoctor, startDate, expirationDate, recurrence,
+        notes, colorShape, form, times,
+        pillPhotoUri, pillDescription, instructions, doctorNotes,
+        pharmacyPhone, remainingPills, dailyDoses, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       med.id,
       med.name,
+      med.photoUri ?? null,
+      med.dosageAmount,
+      med.dosageUnit,
       med.dosage,
+      med.prescribingDoctor,
+      med.startDate,
+      med.expirationDate,
+      med.recurrence,
+      med.notes,
+      med.colorShape,
       med.form,
       JSON.stringify(med.times),
-      med.pillPhotoUri ?? null,
-      med.pillDescription ?? null,
+      med.pillPhotoUri ?? med.photoUri ?? null,
+      med.pillDescription ?? med.colorShape ?? null,
       med.instructions ?? null,
       med.doctorNotes ?? null,
       med.pharmacyPhone ?? null,
@@ -128,6 +147,14 @@ function rowToMedication(row: any): Medication {
   return {
     ...row,
     times: JSON.parse(row.times || '[]'),
+    dosageAmount: row.dosageAmount ?? 0,
+    dosageUnit: row.dosageUnit ?? 'mg',
+    prescribingDoctor: row.prescribingDoctor ?? '',
+    startDate: row.startDate ?? '',
+    expirationDate: row.expirationDate ?? '',
+    recurrence: row.recurrence ?? 'Daily',
+    notes: row.notes ?? '',
+    colorShape: row.colorShape ?? row.pillDescription ?? '',
   };
 }
 

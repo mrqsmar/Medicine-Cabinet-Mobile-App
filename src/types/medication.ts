@@ -4,22 +4,9 @@
 
 // ── Medication ──────────────────────────────────────────────────────
 
-export interface Medication {
-  id: string;
-  name: string;
-  dosage: string;
-  form: MedicationForm;
-  times: string[]; // HH:mm format
-  pillPhotoUri?: string;
-  pillDescription?: string;
-  instructions?: string;
-  doctorNotes?: string;
-  pharmacyPhone?: string;
-  remainingPills?: number;
-  dailyDoses?: number;
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
-}
+export type DosageUnit = 'mg' | 'cc';
+
+export type Recurrence = 'Daily' | 'Weekly' | 'Monthly';
 
 export type MedicationForm =
   | 'tablet'
@@ -31,6 +18,35 @@ export type MedicationForm =
   | 'drops'
   | 'other';
 
+export interface Medication {
+  id: string;
+  name: string;
+  photoUri?: string;
+  dosageAmount: number;
+  dosageUnit: DosageUnit;
+  /** Legacy combined dosage string (e.g. "500 mg") — computed on save. */
+  dosage: string;
+  prescribingDoctor: string;
+  startDate: string; // YYYY-MM-DD
+  expirationDate: string; // YYYY-MM-DD
+  recurrence: Recurrence;
+  notes: string;
+  colorShape: string;
+  form: MedicationForm;
+  times: string[]; // HH:mm format
+  /** @deprecated use photoUri */
+  pillPhotoUri?: string;
+  /** @deprecated use colorShape */
+  pillDescription?: string;
+  instructions?: string;
+  doctorNotes?: string;
+  pharmacyPhone?: string;
+  remainingPills?: number;
+  dailyDoses?: number;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
 // ── Dose ────────────────────────────────────────────────────────────
 
 export interface Dose {
@@ -38,8 +54,8 @@ export interface Dose {
   medicationId: string;
   scheduledTime: string; // HH:mm
   scheduledDate: string; // YYYY-MM-DD
-  quantity: number; // e.g. 1 pill, 5 mL
-  unit: string; // "pill" | "mL" | "mg" etc.
+  quantity: number;
+  unit: string;
 }
 
 // ── ReminderSchedule ────────────────────────────────────────────────
@@ -49,12 +65,12 @@ export type RepeatPattern = 'daily' | 'weekly' | 'monthly' | 'asNeeded';
 export interface ReminderSchedule {
   id: string;
   medicationId: string;
-  times: string[]; // HH:mm entries
+  times: string[];
   repeatPattern: RepeatPattern;
-  daysOfWeek?: number[]; // 0=Sun … 6=Sat (for weekly)
-  dayOfMonth?: number; // 1-31 (for monthly)
+  daysOfWeek?: number[];
+  dayOfMonth?: number;
   enabled: boolean;
-  notifyBefore: number; // minutes before scheduled time (0 = on time)
+  notifyBefore: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -67,13 +83,11 @@ export interface DoseLog {
   id: string;
   medicationId: string;
   doseId?: string;
-  scheduledDate: string; // YYYY-MM-DD
-  scheduledTime: string; // HH:mm
+  scheduledDate: string;
+  scheduledTime: string;
   status: IntakeStatus;
-  takenAt?: string; // ISO 8601 — actual time the dose was taken
+  takenAt?: string;
   notes?: string;
 }
-
-// ── Legacy alias (used by existing screens) ─────────────────────────
 
 export type IntakeLog = DoseLog;

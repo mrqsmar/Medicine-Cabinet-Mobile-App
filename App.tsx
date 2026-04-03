@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import AppNavigator from './src/navigation/AppNavigator';
-import { getAllMedications } from './src/database';
+import { MedicationProvider } from './src/context/MedicationContext';
 import { scheduleMedicationReminders } from './src/services/notifications';
 import { seedSampleData } from './src/seed/seed';
+import { getAllMedications } from './src/database';
 
 export default function App() {
   useEffect(() => {
@@ -13,5 +14,9 @@ export default function App() {
     })();
   }, []);
 
-  return <AppNavigator />;
+  return (
+    <MedicationProvider>
+      <AppNavigator />
+    </MedicationProvider>
+  );
 }

@@ -5,12 +5,11 @@ import {
   FlatList,
   StyleSheet,
   Image,
-  TouchableOpacity,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadow } from '../theme';
 import { CheckmarkBadge } from '../components';
-import { getAllMedications } from '../database';
+import { useMedications } from '../context/MedicationContext';
 import { getDoseLogsForDate } from '../database';
 import { format } from 'date-fns';
 import type { Medication, DoseLog } from '../types/medication';
@@ -22,13 +21,13 @@ interface DoseRow {
 }
 
 export default function HomeScreen() {
+  const { state } = useMedications();
   const [doseRows, setDoseRows] = useState<DoseRow[]>([]);
   const today = format(new Date(), 'yyyy-MM-dd');
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const meds = await getAllMedications();
         const logs = await getDoseLogsForDate(today);
         const logMap = new Map<string, DoseLog>();
         for (const l of logs) {
@@ -36,7 +35,7 @@ export default function HomeScreen() {
         }
 
         const rows: DoseRow[] = [];
-        for (const med of meds) {
+        for (const med of state.medications) {
           for (const t of med.times) {
             rows.push({
               medication: med,
@@ -48,22 +47,23 @@ export default function HomeScreen() {
         rows.sort((a, b) => a.time.localeCompare(b.time));
         setDoseRows(rows);
       })();
-    }, [today]),
+    }, [today, state.medications]),
   );
 
   const takenCount = doseRows.filter((r) => r.log?.status === 'taken').length;
 
   const renderItem = ({ item }: { item: DoseRow }) => {
     const status = item.log?.status ?? 'pending';
+    const photoSource = item.medication.photoUri ?? item.medication.pillPhotoUri;
 
     return (
       <View
         style={[styles.doseCard, status === 'taken' && styles.doseCardDone]}
         accessibilityLabel={`${item.medication.name} at ${item.time}, ${status}`}
       >
-        {item.medication.pillPhotoUri ? (
+        {photoSource ? (
           <Image
-            source={{ uri: item.medication.pillPhotoUri }}
+            source={{ uri: photoSource }}
             style={styles.thumb}
             accessibilityIgnoresInvertColors
           />
@@ -75,7 +75,7 @@ export default function HomeScreen() {
         <View style={styles.doseInfo}>
           <Text style={styles.medName}>{item.medication.name}</Text>
           <Text style={styles.doseTime}>
-            {item.time} · {item.medication.dosage}
+            {item.time} · {item.medication.dosageAmount} {item.medication.dosageUnit}
           </Text>
         </View>
         <CheckmarkBadge status={status} size={36} />
@@ -85,7 +85,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Summary */}
       <View style={styles.summaryCard}>
         <Text style={styles.summaryTitle}>Today</Text>
         <Text style={styles.summaryCount}>

@@ -19,6 +19,10 @@ interface MedCardProps {
 
 export default function MedCard({ medication, onPress, onLongPress }: MedCardProps) {
   const timesLabel = medication.times.join(', ');
+  const photoSource = medication.photoUri ?? medication.pillPhotoUri;
+  const dosageLabel = medication.dosageAmount
+    ? `${medication.dosageAmount} ${medication.dosageUnit}`
+    : medication.dosage;
 
   return (
     <TouchableOpacity
@@ -26,14 +30,13 @@ export default function MedCard({ medication, onPress, onLongPress }: MedCardPro
       onLongPress={onLongPress}
       activeOpacity={0.75}
       accessibilityRole="button"
-      accessibilityLabel={`${medication.name}, ${medication.dosage}, scheduled at ${timesLabel}`}
+      accessibilityLabel={`${medication.name}, ${dosageLabel}, scheduled at ${timesLabel}`}
       style={styles.card}
     >
-      {/* Thumbnail */}
       <View style={styles.thumbnailWrap}>
-        {medication.pillPhotoUri ? (
+        {photoSource ? (
           <Image
-            source={{ uri: medication.pillPhotoUri }}
+            source={{ uri: photoSource }}
             style={styles.thumbnail}
             accessibilityIgnoresInvertColors
           />
@@ -44,20 +47,18 @@ export default function MedCard({ medication, onPress, onLongPress }: MedCardPro
         )}
       </View>
 
-      {/* Info */}
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>
           {medication.name}
         </Text>
         <Text style={styles.dosage} numberOfLines={1}>
-          {medication.dosage}
+          {dosageLabel}
         </Text>
         <Text style={styles.times} numberOfLines={1}>
-          {timesLabel}
+          {medication.recurrence} · {timesLabel}
         </Text>
       </View>
 
-      {/* Chevron */}
       <Text style={styles.chevron} accessibilityElementsHidden>
         ›
       </Text>
