@@ -28,7 +28,7 @@ export default function TodayScreen() {
     const today = format(new Date(), 'yyyy-MM-dd');
     const doseItems = medications.flatMap((m) =>
       (m.times || []).map((t) => {
-        const existing = intakes.find((l) => l.medicationId === m.id && l.date === today && l.time === t);
+        const existing = intakes.find((l) => l.medicationId === m.id && l.scheduledDate === today && l.scheduledTime === t);
         const status: IntakeStatus = existing?.status ?? 'pending';
         return { medication: m, time: t, status };
       })

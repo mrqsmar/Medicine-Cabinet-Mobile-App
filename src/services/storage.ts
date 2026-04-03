@@ -1,6 +1,12 @@
+/**
+ * Legacy AsyncStorage-based persistence layer.
+ *
+ * Kept for backward-compatibility with TodayScreen while the app
+ * migrates to the SQLite database (src/database/index.ts).
+ * New screens should import from '../database' instead.
+ */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { format } from 'date-fns';
-import { IntakeLog, IntakeStatus, Medication } from '../types/medication';
+import type { DoseLog, IntakeStatus, Medication } from '../types/medication';
 
 const KEYS = {
   MEDS: 'medications',
@@ -38,28 +44,35 @@ export async function setIntakeStatus(
   medicationId: string,
   date: string,
   time: string,
-  status: IntakeStatus
+  status: IntakeStatus,
 ): Promise<void> {
   const intakes = await getAllIntakes();
   const key = `${medicationId}|${date}|${time}`;
-  const next = { ...intakes, [key]: { medicationId, date, time, status } satisfies IntakeLog } as Record<string, IntakeLog>;
+  const log: DoseLog = {
+    id: key,
+    medicationId,
+    scheduledDate: date,
+    scheduledTime: time,
+    status,
+  };
+  const next = { ...intakes, [key]: log };
   await AsyncStorage.setItem(KEYS.INTAKES, JSON.stringify(next));
 }
 
-export async function getAllIntakes(): Promise<Record<string, IntakeLog>> {
+export async function getAllIntakes(): Promise<Record<string, DoseLog>> {
   const raw = await AsyncStorage.getItem(KEYS.INTAKES);
-  return raw ? (JSON.parse(raw) as Record<string, IntakeLog>) : {};
+  return raw ? (JSON.parse(raw) as Record<string, DoseLog>) : {};
 }
 
-export async function getIntakeLogsForDate(date: string): Promise<IntakeLog[]> {
+export async function getIntakeLogsForDate(date: string): Promise<DoseLog[]> {
   const all = await getAllIntakes();
-  return Object.values(all).filter((l) => l.date === date);
+  return Object.values(all).filter((l) => l.scheduledDate === date);
 }
 
 export function getLowRefillMeds(medications: Medication[]): Medication[] {
   return medications.filter((m) => {
     if (m.remainingPills == null || m.dailyDoses == null) return false;
-    const threshold = m.dailyDoses * 3; // 3 days left
+    const threshold = m.dailyDoses * 3;
     return m.remainingPills <= threshold;
   });
 }
