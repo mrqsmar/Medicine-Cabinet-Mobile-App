@@ -9,6 +9,8 @@ import {
   Image,
   Platform,
   Alert,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import DateTimePicker, {
   DateTimePickerEvent,
@@ -37,6 +39,11 @@ import {
   Shadow,
 } from '../theme';
 import { format, parse } from 'date-fns';
+import {
+  recognizeMedication,
+  getAnthropicApiKey,
+  type RecognitionResult,
+} from '../services/medRecognition';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -82,6 +89,11 @@ export default function AddEditMedicationScreen() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showExpPicker, setShowExpPicker] = useState(false);
 
+  // AI recognition state
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiResult, setAiResult] = useState<RecognitionResult | null>(null);
+  const [showAiConfirm, setShowAiConfirm] = useState(false);
+
   useEffect(() => {
     if (route.params?.medicationId) {
       getMedicationById(route.params.medicationId).then((m) => {
@@ -104,35 +116,79 @@ export default function AddEditMedicationScreen() {
   const removeTime = (t: string) =>
     setMed((prev) => ({ ...prev, times: prev.times.filter((x) => x !== t) }));
 
-  // ── Photo ─────────────────────────────────────────────────────
+  // ── Photo capture + AI recognition ────────────────────────────
 
-  const pickPhoto = () => {
+  const captureAndAnalyze = async (uri: string) => {
+    set('photoUri', uri);
+
+    // Only attempt AI if API key is configured
+    if (!getAnthropicApiKey()) return;
+
+    setAnalyzing(true);
+    try {
+      const result = await recognizeMedication(uri);
+      setAiResult(result);
+      setShowAiConfirm(true);
+    } catch (err: any) {
+      Alert.alert(
+        'AI Recognition',
+        `Could not identify medication: ${err.message}\n\nYou can fill in the details manually.`,
+      );
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const applyAiResult = () => {
+    if (!aiResult) return;
+    setMed((prev) => ({
+      ...prev,
+      name: aiResult.name || prev.name,
+      dosageAmount: aiResult.dosage_amount || prev.dosageAmount,
+      dosageUnit: aiResult.dosage_unit || prev.dosageUnit,
+      form: aiResult.form || prev.form,
+    }));
+    setShowAiConfirm(false);
+    setAiResult(null);
+  };
+
+  const dismissAiResult = () => {
+    setShowAiConfirm(false);
+    setAiResult(null);
+  };
+
+  const takePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        'Permission Required',
+        'Camera access is needed to take a photo.',
+      );
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+    if (!res.canceled) {
+      await captureAndAnalyze(res.assets[0].uri);
+    }
+  };
+
+  const pickFromGallery = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+    if (!res.canceled) {
+      await captureAndAnalyze(res.assets[0].uri);
+    }
+  };
+
+  const handlePhotoAction = () => {
     Alert.alert('Add Photo', 'Choose a source', [
-      {
-        text: 'Camera',
-        onPress: async () => {
-          const perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (!perm.granted) {
-            Alert.alert('Permission required', 'Camera access is needed to take a photo.');
-            return;
-          }
-          const res = await ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
-            quality: 0.8,
-          });
-          if (!res.canceled) set('photoUri', res.assets[0].uri);
-        },
-      },
-      {
-        text: 'Gallery',
-        onPress: async () => {
-          const res = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            quality: 0.8,
-          });
-          if (!res.canceled) set('photoUri', res.assets[0].uri);
-        },
-      },
+      { text: 'Camera', onPress: takePhoto },
+      { text: 'Gallery', onPress: pickFromGallery },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
@@ -188,27 +244,59 @@ export default function AddEditMedicationScreen() {
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
     >
-      {/* ── Photo ──────────────────────────────────── */}
-      <TouchableOpacity
-        onPress={pickPhoto}
-        style={styles.photoWrap}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Add medication photo"
-      >
-        {med.photoUri ? (
-          <Image
-            source={{ uri: med.photoUri }}
-            style={styles.photo}
-            accessibilityIgnoresInvertColors
-          />
-        ) : (
-          <View style={[styles.photo, styles.photoPlaceholder]}>
-            <Text style={styles.photoPlaceholderIcon}>📷</Text>
-            <Text style={styles.photoPlaceholderText}>Tap to add photo</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+      {/* ── Photo + Camera Row ─────────────────────── */}
+      <View style={styles.photoRow}>
+        {/* Photo circle */}
+        <TouchableOpacity
+          onPress={handlePhotoAction}
+          style={styles.photoWrap}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Add medication photo"
+        >
+          {med.photoUri ? (
+            <Image
+              source={{ uri: med.photoUri }}
+              style={styles.photo}
+              accessibilityIgnoresInvertColors
+            />
+          ) : (
+            <View style={[styles.photo, styles.photoPlaceholder]}>
+              <Text style={styles.photoPlaceholderIcon}>💊</Text>
+              <Text style={styles.photoPlaceholderText}>Tap to add</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Camera button — visually next to the photo */}
+        <TouchableOpacity
+          onPress={takePhoto}
+          style={styles.cameraButton}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Take photo with camera"
+          disabled={analyzing}
+        >
+          {analyzing ? (
+            <ActivityIndicator color={Colors.textOnPrimary} size="small" />
+          ) : (
+            <Text style={styles.cameraIcon}>📷</Text>
+          )}
+          <Text style={styles.cameraLabel}>
+            {analyzing ? 'Analyzing...' : 'Camera'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* AI analyzing overlay */}
+      {analyzing && (
+        <View style={styles.analyzingBanner}>
+          <ActivityIndicator color={Colors.primary} size="small" />
+          <Text style={styles.analyzingText}>
+            Identifying medication...
+          </Text>
+        </View>
+      )}
 
       {/* ── Name ───────────────────────────────────── */}
       <Label text="Medication Name" />
@@ -377,19 +465,64 @@ export default function AddEditMedicationScreen() {
         saveDisabled={!med.name.trim()}
         saving={saving}
       />
+
+      {/* ── AI Confirmation Modal ──────────────────── */}
+      <Modal
+        visible={showAiConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={dismissAiResult}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>AI Identified Medication</Text>
+            <Text style={styles.modalHint}>
+              Review and confirm the details below, or dismiss to fill manually.
+            </Text>
+
+            {aiResult && (
+              <View style={styles.modalFields}>
+                <FieldPreview label="Name" value={aiResult.name} />
+                <FieldPreview
+                  label="Dosage"
+                  value={`${aiResult.dosage_amount} ${aiResult.dosage_unit}`}
+                />
+                <FieldPreview label="Form" value={aiResult.form} />
+              </View>
+            )}
+
+            <CancelSaveBar
+              onCancel={dismissAiResult}
+              onSave={applyAiResult}
+              cancelLabel="Dismiss"
+              saveLabel="Apply"
+            />
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
 
-// ── Label helper ────────────────────────────────────────────────────
+// ── Sub-components ──────────────────────────────────────────────────
 
 function Label({ text }: { text: string }) {
   return <Text style={styles.label}>{text}</Text>;
 }
 
+function FieldPreview({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.previewRow}>
+      <Text style={styles.previewLabel}>{label}</Text>
+      <Text style={styles.previewValue}>{value || '—'}</Text>
+    </View>
+  );
+}
+
 // ── Styles ──────────────────────────────────────────────────────────
 
-const PHOTO_SIZE = 120;
+const PHOTO_SIZE = 100;
+const CAMERA_BTN = 64;
 
 const styles = StyleSheet.create({
   scroll: {
@@ -422,11 +555,15 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
 
-  // Photo
-  photoWrap: {
-    alignSelf: 'center',
+  // Photo + camera row
+  photoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xl,
     marginBottom: Spacing.sm,
   },
+  photoWrap: {},
   photo: {
     width: PHOTO_SIZE,
     height: PHOTO_SIZE,
@@ -441,12 +578,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   photoPlaceholderIcon: {
-    fontSize: 32,
+    fontSize: 28,
   },
   photoPlaceholderText: {
     fontSize: FontSizes.xs,
     color: Colors.textSecondary,
     marginTop: Spacing.xs,
+  },
+  cameraButton: {
+    width: CAMERA_BTN,
+    height: CAMERA_BTN,
+    borderRadius: CAMERA_BTN / 2,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.md,
+  },
+  cameraIcon: {
+    fontSize: 24,
+  },
+  cameraLabel: {
+    fontSize: 11,
+    fontWeight: FontWeights.semibold,
+    color: Colors.textOnPrimary,
+    marginTop: 2,
+  },
+
+  // Analyzing banner
+  analyzingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.info,
+  },
+  analyzingText: {
+    fontSize: FontSizes.base,
+    fontWeight: FontWeights.medium,
+    color: Colors.info,
   },
 
   // Dosage row
@@ -498,6 +671,54 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: FontSizes.sm,
+    color: Colors.textPrimary,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    justifyContent: 'center',
+    padding: Spacing.xl,
+  },
+  modalCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    ...Shadow.md,
+  },
+  modalTitle: {
+    fontSize: FontSizes.lg,
+    fontWeight: FontWeights.bold,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  modalHint: {
+    fontSize: FontSizes.base,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+    lineHeight: 24,
+  },
+  modalFields: {
+    marginTop: Spacing.xl,
+    gap: Spacing.md,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  previewLabel: {
+    fontSize: FontSizes.base,
+    color: Colors.textSecondary,
+  },
+  previewValue: {
+    fontSize: FontSizes.base,
+    fontWeight: FontWeights.bold,
     color: Colors.textPrimary,
   },
 });

@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, Switch, StyleSheet, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  Switch,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  TextInput,
+} from 'react-native';
 import {
   Colors,
   FontSizes,
@@ -7,13 +15,30 @@ import {
   Spacing,
   BorderRadius,
   Shadow,
+  MinTapSize,
 } from '../theme';
 import { BigButton } from '../components';
+import {
+  setAnthropicApiKey,
+  getAnthropicApiKey,
+} from '../services/medRecognition';
 
 export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [largeText, setLargeText] = useState(false);
+  const [apiKey, setApiKey] = useState(getAnthropicApiKey() ?? '');
+
+  const handleSaveApiKey = () => {
+    const trimmed = apiKey.trim();
+    if (trimmed) {
+      setAnthropicApiKey(trimmed);
+      Alert.alert('Saved', 'API key saved. Photo AI auto-fill is now enabled.');
+    } else {
+      setAnthropicApiKey('');
+      Alert.alert('Cleared', 'API key removed. Photo AI auto-fill is disabled.');
+    }
+  };
 
   const handleClearData = () => {
     Alert.alert(
@@ -58,6 +83,31 @@ export default function SettingsScreen() {
           label="Extra-Large Text"
           value={largeText}
           onToggle={setLargeText}
+        />
+      </View>
+
+      <Text style={styles.sectionHeader}>AI Photo Recognition</Text>
+      <View style={styles.card}>
+        <Text style={styles.apiHint}>
+          Enter your Anthropic API key to enable automatic medication
+          identification from photos.
+        </Text>
+        <TextInput
+          style={styles.apiInput}
+          value={apiKey}
+          onChangeText={setApiKey}
+          placeholder="sk-ant-..."
+          placeholderTextColor={Colors.disabled}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+          accessibilityLabel="Anthropic API key"
+        />
+        <BigButton
+          label="Save API Key"
+          onPress={handleSaveApiKey}
+          variant="primary"
+          style={{ marginTop: Spacing.md }}
         />
       </View>
 
@@ -130,6 +180,22 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontSize: FontSizes.base,
     color: Colors.textPrimary,
+  },
+  apiHint: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: Spacing.md,
+  },
+  apiInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+    backgroundColor: Colors.background,
+    minHeight: MinTapSize,
   },
   version: {
     fontSize: FontSizes.sm,
