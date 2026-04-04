@@ -231,7 +231,7 @@ function DoseCard({
           <Image
             source={{ uri: photoSource }}
             style={styles.thumb}
-            accessibilityIgnoresInvertColors
+            accessibilityIgnoresInvertColors={true}
           />
         ) : (
           <View style={[styles.thumb, styles.placeholderThumb]}>

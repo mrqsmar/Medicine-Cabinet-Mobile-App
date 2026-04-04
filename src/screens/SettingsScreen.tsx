@@ -100,7 +100,7 @@ export default function SettingsScreen() {
           placeholderTextColor={Colors.disabled}
           autoCapitalize="none"
           autoCorrect={false}
-          secureTextEntry
+          secureTextEntry={true}
           accessibilityLabel="Anthropic API key"
         />
         <BigButton

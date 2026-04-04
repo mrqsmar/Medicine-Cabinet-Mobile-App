@@ -63,7 +63,7 @@ export default function MedicationDetailScreen() {
         <Image
           source={{ uri: photoSource }}
           style={styles.photo}
-          accessibilityIgnoresInvertColors
+          accessibilityIgnoresInvertColors={true}
         />
       ) : (
         <View style={[styles.photo, styles.placeholderPhoto]}>

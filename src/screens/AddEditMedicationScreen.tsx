@@ -258,7 +258,7 @@ export default function AddEditMedicationScreen() {
             <Image
               source={{ uri: med.photoUri }}
               style={styles.photo}
-              accessibilityIgnoresInvertColors
+              accessibilityIgnoresInvertColors={true}
             />
           ) : (
             <View style={[styles.photo, styles.photoPlaceholder]}>

@@ -38,7 +38,7 @@ export default function MedCard({ medication, onPress, onLongPress }: MedCardPro
           <Image
             source={{ uri: photoSource }}
             style={styles.thumbnail}
-            accessibilityIgnoresInvertColors
+            accessibilityIgnoresInvertColors={true}
           />
         ) : (
           <View style={[styles.thumbnail, styles.placeholderThumb]}>
