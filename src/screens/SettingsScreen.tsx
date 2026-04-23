@@ -21,21 +21,30 @@ import { BigButton } from '../components';
 import {
   setAnthropicApiKey,
   getAnthropicApiKey,
+  loadApiKey,
 } from '../services/medRecognition';
+import { clearAllData } from '../database';
+import { useMedications } from '../context/MedicationContext';
 
 export default function SettingsScreen() {
+  const { refresh } = useMedications();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [largeText, setLargeText] = useState(false);
-  const [apiKey, setApiKey] = useState(getAnthropicApiKey() ?? '');
+  const [apiKey, setApiKey] = useState('');
 
-  const handleSaveApiKey = () => {
+  useEffect(() => {
+    loadApiKey().then(() => {
+      setApiKey(getAnthropicApiKey() ?? '');
+    });
+  }, []);
+
+  const handleSaveApiKey = async () => {
     const trimmed = apiKey.trim();
+    await setAnthropicApiKey(trimmed);
     if (trimmed) {
-      setAnthropicApiKey(trimmed);
       Alert.alert('Saved', 'API key saved. Photo AI auto-fill is now enabled.');
     } else {
-      setAnthropicApiKey('');
       Alert.alert('Cleared', 'API key removed. Photo AI auto-fill is disabled.');
     }
   };
@@ -49,8 +58,9 @@ export default function SettingsScreen() {
         {
           text: 'Delete Everything',
           style: 'destructive',
-          onPress: () => {
-            // TODO: implement database wipe
+          onPress: async () => {
+            await clearAllData();
+            await refresh();
             Alert.alert('Done', 'All data has been cleared.');
           },
         },

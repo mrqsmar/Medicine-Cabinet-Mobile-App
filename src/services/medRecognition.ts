@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DosageUnit, MedicationForm } from '../types/medication';
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -12,10 +13,22 @@ export interface RecognitionResult {
 
 // ── API key management ──────────────────────────────────────────────
 
+const API_KEY_STORAGE_KEY = 'anthropic_api_key';
+
 let _apiKey: string | null = null;
 
-export function setAnthropicApiKey(key: string) {
-  _apiKey = key;
+export async function loadApiKey(): Promise<void> {
+  const stored = await AsyncStorage.getItem(API_KEY_STORAGE_KEY);
+  _apiKey = stored ?? null;
+}
+
+export async function setAnthropicApiKey(key: string): Promise<void> {
+  _apiKey = key || null;
+  if (key) {
+    await AsyncStorage.setItem(API_KEY_STORAGE_KEY, key);
+  } else {
+    await AsyncStorage.removeItem(API_KEY_STORAGE_KEY);
+  }
 }
 
 export function getAnthropicApiKey(): string | null {
@@ -45,7 +58,7 @@ export async function recognizeMedication(
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       messages: [
         {
@@ -61,7 +74,7 @@ export async function recognizeMedication(
             },
             {
               type: 'text',
-              text: 'Identify this medication. Return JSON only: { "name": string, "dosage_amount": number, "dosage_unit": "mg" or "cc", "form": "tablet" or "liquid" }',
+              text: 'Identify this medication. Return JSON only, no markdown: { "name": string, "dosage_amount": number, "dosage_unit": "mg" or "cc", "form": "tablet" or "capsule" or "liquid" }',
             },
           ],
         },

@@ -247,6 +247,15 @@ export async function deleteReminder(id: string): Promise<void> {
   await db.runAsync('DELETE FROM reminder_schedules WHERE id = ?', [id]);
 }
 
+export async function clearAllData(): Promise<void> {
+  const db = await getDatabase();
+  await db.execAsync(`
+    DELETE FROM dose_logs;
+    DELETE FROM reminder_schedules;
+    DELETE FROM medications;
+  `);
+}
+
 function rowToReminder(row: any): ReminderSchedule {
   return {
     ...row,
