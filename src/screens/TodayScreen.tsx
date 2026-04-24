@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { getMedications, getIntakeLogsForDate, setIntakeStatus, getLowRefillMeds } from '../services/storage';
 import { format, isToday } from 'date-fns';
 import { IntakeLog, IntakeStatus, Medication } from '../types/medication';
+import { colors } from '../theme/tokens';
 
 export default function TodayScreen() {
   const [medications, setMedications] = useState<Medication[]>([]);
@@ -109,24 +110,24 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 24, paddingHorizontal: 16, backgroundColor: '#fff' },
+  container: { flex: 1, paddingTop: 24, paddingHorizontal: 16, backgroundColor: colors.canvas },
   title: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
-  alertBox: { backgroundColor: '#FFF4E5', borderColor: '#FFC58F', borderWidth: 1, padding: 12, borderRadius: 8, marginBottom: 12 },
-  alertText: { color: '#8B5E00', marginBottom: 8 },
+  alertBox: { backgroundColor: colors.amberBg, borderColor: colors.amber, borderWidth: 1, padding: 12, borderRadius: 8, marginBottom: 12 },
+  alertText: { color: colors.amberInk, marginBottom: 8 },
   listItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
   itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   itemRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   medName: { fontSize: 16, fontWeight: '600' },
-  medMeta: { color: '#666' },
+  medMeta: { color: colors.mute },
   photo: { width: 40, height: 40, borderRadius: 20 },
-  placeholderPhoto: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5e5e5' },
+  placeholderPhoto: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.hairline },
   button: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 },
-  takeButton: { backgroundColor: '#16a34a' },
-  skipButton: { backgroundColor: '#dc2626' },
-  speakButton: { backgroundColor: '#2563eb' },
-  refillButton: { alignSelf: 'flex-start', backgroundColor: '#2563eb' },
-  buttonText: { color: 'white', fontWeight: '600' },
-  separator: { height: 1, backgroundColor: '#eee' },
+  takeButton: { backgroundColor: colors.sage },
+  skipButton: { backgroundColor: colors.amber },
+  speakButton: { backgroundColor: colors.navy },
+  refillButton: { alignSelf: 'flex-start', backgroundColor: colors.navy },
+  buttonText: { color: colors.card, fontWeight: '600' },
+  separator: { height: 1, backgroundColor: colors.hairline },
   taken: { opacity: 0.6 },
   skipped: { opacity: 0.6 }
 });

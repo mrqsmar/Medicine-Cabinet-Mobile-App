@@ -5,6 +5,7 @@ import { getMedications, deleteMedication } from '../services/storage';
 import { Medication } from '../types/medication';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { colors } from '../theme/tokens';
 
 export default function MedicationsListScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -55,13 +56,13 @@ export default function MedicationsListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: colors.canvas },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   name: { fontSize: 16, fontWeight: '600' },
-  meta: { color: '#666' },
+  meta: { color: colors.mute },
   photo: { width: 40, height: 40, borderRadius: 20 },
-  placeholderPhoto: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5e5e5' },
-  separator: { height: 1, backgroundColor: '#eee' },
-  fab: { position: 'absolute', right: 20, bottom: 20, backgroundColor: '#2563eb', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', elevation: 4 },
-  fabText: { color: 'white', fontSize: 28, lineHeight: 28, fontWeight: '700' }
+  placeholderPhoto: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.hairline },
+  separator: { height: 1, backgroundColor: colors.hairline },
+  fab: { position: 'absolute', right: 20, bottom: 20, backgroundColor: colors.navy, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', elevation: 4 },
+  fabText: { color: colors.card, fontSize: 28, lineHeight: 28, fontWeight: '700' }
 });

@@ -19,6 +19,7 @@ import {
   Shadow,
   MinTapSize,
 } from '../theme';
+import { colors } from '../theme/tokens';
 import { useMedications } from '../context/MedicationContext';
 import { getDoseLogsForDate, upsertDoseLog } from '../database';
 import {
@@ -316,7 +317,7 @@ const styles = StyleSheet.create({
   // Warning banners
   warningBanner: {
     flexDirection: 'row',
-    backgroundColor: '#FFF4E5',
+    backgroundColor: colors.amberBg,
     borderWidth: 2,
     borderColor: Colors.warning,
     borderRadius: BorderRadius.lg,
@@ -326,9 +327,9 @@ const styles = StyleSheet.create({
   },
   expirationBanner: {
     flexDirection: 'row',
-    backgroundColor: '#FDE8E8',
+    backgroundColor: colors.amberBg,
     borderWidth: 2,
-    borderColor: Colors.cancel,
+    borderColor: colors.amber,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
     marginTop: Spacing.md,
@@ -345,23 +346,23 @@ const styles = StyleSheet.create({
   warningTitle: {
     fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
-    color: '#8B5E00',
+    color: colors.amberInk,
   },
   warningBody: {
     fontSize: FontSizes.base,
     fontWeight: FontWeights.medium,
-    color: '#8B5E00',
+    color: colors.amberInk,
     marginTop: Spacing.xs,
   },
   expirationTitle: {
     fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
-    color: Colors.cancel,
+    color: colors.amberInk,
   },
   expirationBody: {
     fontSize: FontSizes.base,
     fontWeight: FontWeights.medium,
-    color: Colors.cancel,
+    color: colors.amberInk,
     marginTop: Spacing.xs,
   },
 
@@ -390,7 +391,7 @@ const styles = StyleSheet.create({
   },
   progressBarBg: {
     height: 12,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: colors.navySoft,
     borderRadius: 6,
     marginTop: Spacing.md,
     overflow: 'hidden',

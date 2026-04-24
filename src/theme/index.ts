@@ -7,47 +7,49 @@
  *  - Minimum 48 × 48 dp tap targets (Material guidelines / Fitt's Law)
  */
 
+import { colors, radii, type as typeScale } from './tokens';
+
 // ── Palette ─────────────────────────────────────────────────────────
 
 export const Colors = {
   // Primary
-  primary: '#0B2545', // deep navy
-  primaryLight: '#134074', // lighter navy for hover / pressed
-  accent: '#006D6F', // dark teal
+  primary: colors.navy,
+  primaryLight: colors.navyDeep,
+  accent: colors.sage,
 
   // Semantic
-  confirm: '#1B7A3D', // green — save / confirm actions
-  cancel: '#C0392B', // red   — cancel / destructive actions
-  warning: '#D4A017', // amber — low-refill warnings
-  info: '#2471A3', // blue  — informational badges
+  confirm: colors.sage,       // green — save / confirm actions
+  cancel: colors.coral,       // coral — cancel / destructive actions
+  warning: colors.amber,      // amber — low-refill warnings
+  info: colors.navy,          // navy  — informational badges
 
   // Neutrals
-  white: '#FFFFFF',
-  background: '#FAFAFA',
-  surface: '#FFFFFF',
-  border: '#D5D8DC',
-  textPrimary: '#1C1C1E', // near-black for body text
-  textSecondary: '#5A5A5E',
-  textOnPrimary: '#FFFFFF',
-  textOnConfirm: '#FFFFFF',
-  textOnCancel: '#FFFFFF',
+  white: colors.card,
+  background: colors.canvas,
+  surface: colors.card,
+  border: colors.hairline,
+  textPrimary: colors.ink,
+  textSecondary: colors.inkSoft,
+  textOnPrimary: colors.card,
+  textOnConfirm: colors.card,
+  textOnCancel: colors.card,
 
   // Misc
-  disabled: '#B0B0B0',
+  disabled: colors.mute,
   overlay: 'rgba(0, 0, 0, 0.45)',
 } as const;
 
 // ── Typography ──────────────────────────────────────────────────────
 
 export const FontSizes = {
-  xs: 14,
-  sm: 16,
-  base: 18, // minimum for older adults
-  md: 20,
-  lg: 24,
-  xl: 28,
-  xxl: 34,
-  hero: 40,
+  xs: typeScale.tiny,
+  sm: typeScale.small,
+  base: typeScale.body,     // minimum for older adults
+  md: typeScale.bodyLg,
+  lg: typeScale.h2,
+  xl: typeScale.h1,
+  xxl: typeScale.display,
+  hero: typeScale.display,
 } as const;
 
 export const FontWeights = {
@@ -76,9 +78,9 @@ export const HitSlop = { top: 12, bottom: 12, left: 12, right: 12 };
 export const MinTapSize = 48; // dp — Material guideline minimum
 
 export const BorderRadius = {
-  sm: 6,
-  md: 10,
-  lg: 16,
+  sm: radii.sm,
+  md: radii.md,
+  lg: radii.lg,
   pill: 999,
 } as const;
 
@@ -86,14 +88,14 @@ export const BorderRadius = {
 
 export const Shadow = {
   sm: {
-    shadowColor: '#000',
+    shadowColor: colors.ink,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.12,
     shadowRadius: 3,
     elevation: 2,
   },
   md: {
-    shadowColor: '#000',
+    shadowColor: colors.ink,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.16,
     shadowRadius: 6,
