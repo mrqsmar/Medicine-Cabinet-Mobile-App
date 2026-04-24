@@ -1,5 +1,4 @@
 import React from 'react';
-import { Text } from 'react-native';
 import {
   NavigationContainer,
   DefaultTheme,
@@ -13,27 +12,31 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import HomeScreen from '../screens/HomeScreen';
 import MedicationsScreen from '../screens/MedicationsScreen';
+import ProgressScreen from '../screens/ProgressScreen';
+import MoreScreen from '../screens/MoreScreen';
 import AddEditMedicationScreen from '../screens/AddEditMedicationScreen';
+import MedicationDetailScreen from '../screens/MedicationDetailScreen';
 import RemindersScreen from '../screens/RemindersScreen';
 import SettingsScreen from '../screens/SettingsScreen';
-import MedicationDetailScreen from '../screens/MedicationDetailScreen';
 
-import { Colors, FontSizes, FontWeights, MinTapSize, Spacing } from '../theme';
+import { Colors, FontSizes, FontWeights } from '../theme';
+import TabBar from './TabBar';
 
-// ── Param lists ─────────────────────────────────────────────────────
+// ── Param lists ──────────────────────────────────────────────────────
 
 export type RootStackParamList = {
   Tabs: undefined;
   MedicationDetail: { medicationId: string };
   AddEditMedication: { medicationId?: string };
+  Reminders: undefined;
+  Settings: undefined;
 };
 
 export type TabsParamList = {
-  Home: undefined;
-  Medications: undefined;
-  AddMedication: undefined;
-  Reminders: undefined;
-  Settings: undefined;
+  Today: undefined;
+  Meds: undefined;
+  Progress: undefined;
+  More: undefined;
 };
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -41,7 +44,7 @@ const Tab = createBottomTabNavigator<TabsParamList>();
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-// ── Custom theme ────────────────────────────────────────────────────
+// ── Navigation theme ─────────────────────────────────────────────────
 
 const AppTheme = {
   ...DefaultTheme,
@@ -55,35 +58,13 @@ const AppTheme = {
   },
 };
 
-// Tab icon helper — plain-text icons sized for accessibility
-function tabIcon(label: string) {
-  return ({ color }: { color: string }) => (
-    <Text style={{ fontSize: 22, color }} accessibilityElementsHidden>
-      {label}
-    </Text>
-  );
-}
-
-// ── Bottom tabs ─────────────────────────────────────────────────────
+// ── Bottom tabs ──────────────────────────────────────────────────────
 
 function Tabs() {
   return (
     <Tab.Navigator
+      tabBar={(props) => <TabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.disabled,
-        tabBarLabelStyle: {
-          fontSize: FontSizes.xs,
-          fontWeight: FontWeights.medium,
-        },
-        tabBarStyle: {
-          height: 64,
-          paddingBottom: Spacing.sm,
-          paddingTop: Spacing.xs,
-        },
-        tabBarItemStyle: {
-          minHeight: MinTapSize,
-        },
         headerTitleStyle: {
           fontSize: FontSizes.lg,
           fontWeight: FontWeights.bold,
@@ -92,44 +73,24 @@ function Tabs() {
       }}
     >
       <Tab.Screen
-        name="Home"
+        name="Today"
         component={HomeScreen}
-        options={{
-          title: 'Home',
-          tabBarIcon: tabIcon('🏠'),
-        }}
+        options={{ title: "Today's Doses" }}
       />
       <Tab.Screen
-        name="Medications"
+        name="Meds"
         component={MedicationsScreen}
-        options={{
-          title: 'Medications',
-          tabBarIcon: tabIcon('💊'),
-        }}
+        options={{ title: 'Medications' }}
       />
       <Tab.Screen
-        name="AddMedication"
-        component={AddEditMedicationScreen}
-        options={{
-          title: 'Add',
-          tabBarIcon: tabIcon('➕'),
-        }}
+        name="Progress"
+        component={ProgressScreen}
+        options={{ title: 'Progress' }}
       />
       <Tab.Screen
-        name="Reminders"
-        component={RemindersScreen}
-        options={{
-          title: 'Reminders',
-          tabBarIcon: tabIcon('🔔'),
-        }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          title: 'Settings',
-          tabBarIcon: tabIcon('⚙️'),
-        }}
+        name="More"
+        component={MoreScreen}
+        options={{ title: 'More' }}
       />
     </Tab.Navigator>
   );
@@ -163,6 +124,16 @@ export default function AppNavigator() {
           name="AddEditMedication"
           component={AddEditMedicationScreen}
           options={{ title: 'Add / Edit Medication' }}
+        />
+        <RootStack.Screen
+          name="Reminders"
+          component={RemindersScreen}
+          options={{ title: 'Reminders' }}
+        />
+        <RootStack.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ title: 'Settings' }}
         />
       </RootStack.Navigator>
     </NavigationContainer>
